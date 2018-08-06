@@ -23,10 +23,11 @@ const consulAddr = "http://localhost:8500"
 
 var consulClient *api.Client
 var responses []string
+var grpcServers []*grpc.Server
+var sockets []net.Listener
 
 func init() {
 	godog.BindFlags("godog.", flag.CommandLine, &opt)
-	responses = make([]string, 0)
 }
 
 func TestMain(m *testing.M) {
@@ -57,8 +58,7 @@ func thatConsulIsRunning() error {
 }
 
 func theServicesAreRunningAndRegistered() error {
-	go runGRPCServer("localhost:7711")
-	go runGRPCServer("localhost:7712")
+	runGRPCServer("localhost:7711")
 
 	err := consulClient.Agent().ServiceRegister(&api.AgentServiceRegistration{
 		ID:      "test_grpc1",
@@ -69,6 +69,8 @@ func theServicesAreRunningAndRegistered() error {
 	if err != nil {
 		return err
 	}
+
+	runGRPCServer("localhost:7712")
 
 	err = consulClient.Agent().ServiceRegister(&api.AgentServiceRegistration{
 		ID:      "test_grpc2",
@@ -85,7 +87,7 @@ func theServicesAreRunningAndRegistered() error {
 
 func iCallUseTheClientTimes(arg1 int) error {
 	lb := grpc.RoundRobin(
-		resolver.NewResolver(1*time.Second, consulClient.Health()),
+		resolver.NewResolver(10*time.Second, consulClient.Health()),
 	)
 
 	// create a new client and wait to establish a connection before returnig
@@ -154,14 +156,30 @@ func FeatureContext(s *godog.Suite) {
 }
 
 func setup(i interface{}) {
+	responses = make([]string, 0)
+	grpcServers = make([]*grpc.Server, 0)
+	sockets = make([]net.Listener, 0)
+
 	conf := api.DefaultConfig()
 	conf.Address = consulAddr
 	consulClient, _ = api.NewClient(conf)
 }
 
 func cleanup(i interface{}, err error) {
+	// deregister the servers
 	consulClient.Agent().ServiceDeregister("test_grpc1")
 	consulClient.Agent().ServiceDeregister("test_grpc2")
+
+	// stop the gRPC servers
+	for _, s := range grpcServers {
+		s.GracefulStop()
+	}
+
+	// close the sockets
+	for _, s := range sockets {
+		s.Close()
+		fmt.Println("closing", s.Addr().String())
+	}
 }
 
 func runGRPCServer(listen string) {
@@ -172,5 +190,8 @@ func runGRPCServer(listen string) {
 
 	grpcServer := grpc.NewServer()
 	echo.RegisterEchoServiceServer(grpcServer, &echo.EchoServiceServerImpl{ID: listen})
-	grpcServer.Serve(lis)
+	go grpcServer.Serve(lis)
+
+	grpcServers = append(grpcServers, grpcServer)
+	sockets = append(sockets, lis)
 }
