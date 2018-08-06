@@ -101,18 +101,20 @@ func TestNextBlocksWhenNoChangesFromConsul(t *testing.T) {
 
 	timeOut := make(chan bool)
 
-	// test after n seconds
-	time.AfterFunc(2*time.Millisecond, func() {
+	// test after 3 itterations
+	time.AfterFunc(3400*time.Microsecond, func() {
 		timeOut <- true
 	})
 
+	testComplete := false
 	go func() {
 		w.Next()
-		t.Fatal("Next should block and never return")
+		assert.True(t, testComplete, "Next should not have returned before close was called")
 	}()
 
 	// check that the next call blocks for n itterations when no changes from consul
 	<-timeOut
+	testComplete = true
 	w.Close() // stop the watcher
-	healthMock.AssertNumberOfCalls(t, "Service", 3)
+	healthMock.AssertNumberOfCalls(t, "Service", 4)
 }

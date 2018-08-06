@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/consul/api"
@@ -14,19 +15,19 @@ type ConsulWatcher struct {
 	update       time.Duration
 	service      string
 	addressCache []string
-	running      bool
+	running      uint32
 }
 
 // NewConsulWatcher creates and returns a ConsulWatcher with the given parameters
 func NewConsulWatcher(service string, c ConsulHealth, watchInterval time.Duration) *ConsulWatcher {
-	return &ConsulWatcher{c, watchInterval, service, make([]string, 0), true}
+	return &ConsulWatcher{c, watchInterval, service, make([]string, 0), 1}
 }
 
 // Next blocks until an update or error happens. It may return one or more
 // updates. The first call should get the full set of the results. It should
 // return an error if and only if Watcher cannot recover.
 func (c *ConsulWatcher) Next() ([]*naming.Update, error) {
-	for c.running == true {
+	for atomic.LoadUint32(&c.running) == 1 {
 		se, _, err := c.client.Service(c.service, "", true, nil)
 		if err != nil {
 			return nil, err
@@ -46,7 +47,7 @@ func (c *ConsulWatcher) Next() ([]*naming.Update, error) {
 
 // Close closes the Watcher.
 func (c *ConsulWatcher) Close() {
-	c.running = false
+	atomic.StoreUint32(&c.running, 0)
 }
 
 func (c *ConsulWatcher) buildUpdate(ses []*api.ServiceEntry) ([]*naming.Update, error) {
