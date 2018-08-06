@@ -36,7 +36,7 @@ func (c *ConsulWatcher) Next() ([]*naming.Update, error) {
 		up, err := c.buildUpdate(se)
 
 		if len(up) > 0 {
-			return up, err
+			return up, nil
 		}
 
 		time.Sleep(c.update)
@@ -56,7 +56,7 @@ func (c *ConsulWatcher) buildUpdate(ses []*api.ServiceEntry) ([]*naming.Update, 
 
 	// check additions
 	for _, se := range ses {
-		addr := fmt.Sprintf("%s:%d", se.Service.Address, se.Service.Port)
+		addr := buildAddress(se)
 		// does this address already exist in the cache?
 		if !cacheContains(addr, c.addressCache) {
 			nc = append(nc, addr)
@@ -98,10 +98,18 @@ func cacheContains(s string, in []string) bool {
 
 func serviceEntryContains(s string, in []*api.ServiceEntry) bool {
 	for _, i := range in {
-		if fmt.Sprintf("%s:%d", i.Service.Address, i.Service.Port) == s {
+		if buildAddress(i) == s {
 			return true
 		}
 	}
 
 	return false
+}
+
+func buildAddress(se *api.ServiceEntry) string {
+	if se.Service.Address != "" {
+		return fmt.Sprintf("%s:%d", se.Service.Address, se.Service.Port)
+	}
+
+	return fmt.Sprintf("%s:%d", se.Node.Address, se.Service.Port)
 }

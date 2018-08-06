@@ -37,6 +37,10 @@
   name = "google.golang.org/grpc"
   version = "1.14.0"
 
+[[constraint]]
+  name = "github.com/DATA-DOG/godog"
+  branch = "master"
+
 [prune]
   go-tests = true
   unused-packages = true

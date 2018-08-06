@@ -60,6 +60,10 @@ func TestNextReturnsInitialUpdatesFromConsul(t *testing.T) {
 	assert.Equal(t, naming.Add, nu[0].Op)
 }
 
+func TestNextReturnsInitialUpdatesFromConsulSetsNodeWhenNoAddr(t *testing.T) {
+	t.Fatal("Pending")
+}
+
 func TestNextReturnsUpdatesContainingAddedItemsFromConsul(t *testing.T) {
 	w := setupWatcher(t)
 	w.Next()
