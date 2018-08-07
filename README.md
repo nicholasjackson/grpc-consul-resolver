@@ -3,12 +3,18 @@
 [![CircleCI](https://circleci.com/gh/nicholasjackson/grpc-consul-resolver.svg?style=svg)](https://circleci.com/gh/nicholasjackson/grpc-consul-resolver)
 [![GoDoc](https://godoc.org/github.com/nicholasjackson/grpc-consul-resolver?status.svg)](https://godoc.org/github.com/nicholasjackson/grpc-consul-resolver)
 
-This repository implements a Resolver for Consul which can be used with gRPC load balancers.
+This repository implements a naming.Resolver for Consul which can be used with gRPC load balancers.
 
 For information on load balancing concepts with gRPC please see the documentation:   
 [https://github.com/grpc/grpc/blob/master/doc/load-balancing.md](https://github.com/grpc/grpc/blob/master/doc/load-balancing.md)
 
-When creating a gRPC load balancer a resolver must be passed as a dependency, it is the resolver's job is to determine the endpoints for the given service name.  When `grpc.Dial` has been setup with a load balancer and you make a call to a service, internal the gRPC framework
+When creating a gRPC load balancer a resolver must be passed as a dependency:
+
+```
+func RoundRobin(r naming.Resolver) Balancer
+```
+
+It is the resolver's job is to determine the endpoints for the given service name.  When `grpc.Dial` has been setup with a load balancer and you make a call to a service, internal the gRPC framework
 requests an endpoint from the load balancer.  The load balancer gets this information from the resolver at creation time, this is supplied by the resolver function `Next()`.   
 
 Once this first batch of endpoints has been retrieved it is the resolvers job to watch the service catalog and to return any updated information, letting the load balancer know of any added or deleted records.  The `Next()` function blocks until there is updated service information, internally inside the load balancer the resolvers `Next()` function is continually called, a return from this function informs it that it needs to update the internal endpoint list.  
