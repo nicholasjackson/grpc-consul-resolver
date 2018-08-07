@@ -1,5 +1,6 @@
 # GRPC Consul Resolver
 
+[![CircleCI](https://circleci.com/gh/nicholasjackson/grpc-consul-resolver.svg?style=svg)](https://circleci.com/gh/nicholasjackson/grpc-consul-resolver)
 
 Basic usage:
 ```
