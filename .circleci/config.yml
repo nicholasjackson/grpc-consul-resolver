@@ -1,0 +1,40 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.10.3
+    steps:
+      - checkout
+      - run: make build 
+  test:
+    docker:
+      - image: circleci/golang:1.10.3
+    steps:
+      - checkout
+      - run: make test_unit
+  functional:
+    docker:
+      - image: circleci/golang:1.10.3
+    steps:
+      - checkout
+      - run: 
+          name: install and start consul
+          command: |
+            wget https://releases.hashicorp.com/consul/1.2.2/consul_1.2.2_linux_amd64.zip
+            unzip consul_1.2.2_linux_amd64.zip -d /usr/bin
+            consul agent -dev -config-file=./functional_tests/consul.hcl 2>"/tmp/consul.out" &
+            sleep 3
+      - run: make test_functional
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
+      - functional:
+          requires:
+            - build
+            - test

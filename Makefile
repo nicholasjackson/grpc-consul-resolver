@@ -1,3 +1,6 @@
+build:
+	go build ./*.go
+
 test_unit:
 	go test -race ./...
 
