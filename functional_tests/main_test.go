@@ -86,9 +86,8 @@ func theServicesAreRunningAndRegistered() error {
 }
 
 func iCallUseTheClientTimes(arg1 int) error {
-	lb := grpc.RoundRobin(
-		resolver.NewResolver(10*time.Second, consulClient.Health()),
-	)
+	r := resolver.NewResolver(consulClient.Health())
+	lb := grpc.RoundRobin(r)
 
 	// create a new client and wait to establish a connection before returnig
 	c, err := grpc.Dial(
@@ -178,7 +177,6 @@ func cleanup(i interface{}, err error) {
 	// close the sockets
 	for _, s := range sockets {
 		s.Close()
-		fmt.Println("closing", s.Addr().String())
 	}
 }
 

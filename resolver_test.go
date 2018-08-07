@@ -2,19 +2,18 @@ package resolver
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCreatesNewResolver(t *testing.T) {
-	r := NewResolver(1*time.Millisecond, &MockConsulHealth{})
+	r := NewResolver(&MockConsulHealth{})
 
 	assert.NotNil(t, r)
 }
 
 func TestResolveRerturnsWatcher(t *testing.T) {
-	r := NewResolver(1*time.Millisecond, &MockConsulHealth{})
+	r := NewResolver(&MockConsulHealth{})
 
 	w, err := r.Resolve("target")
 
