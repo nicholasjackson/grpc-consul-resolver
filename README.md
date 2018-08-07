@@ -89,7 +89,7 @@ PASS
 ok      github.com/nicholasjackson/grpc-consul-resolver 1.073s
 ```
 
-In addition to the unit tests there is also an integration test suite, the test suite requires a `Consul` server to be running on locatlhost with the default ports as a dependency. The integration tests start two dummy gRPC servers and register them with the Consul server's Service Catalog.  A gRPC client is then created to ensure the function of the Resolver.  Integration tests can be found in the sub folder `./functional_tests`, the [GoDog](https://github.com/DATA-DOG/godog) Cucumber BDD framework is used to execute these tests.  To execute theintegration tests:
+In addition to the unit tests there is also an integration test suite, the test suite requires a `Consul` server to be running on localhost with the default ports as a dependency. The integration tests start two dummy gRPC servers and register them with the Consul server's Service Catalog.  A gRPC client is then created to ensure the function of the Resolver.  Integration tests can be found in the sub folder `./functional_tests`, the [GoDog](https://github.com/DATA-DOG/godog) Cucumber BDD framework is used to execute these tests.  To execute theintegration tests:
 
 ```bash
 $ make test_functional
@@ -130,5 +130,5 @@ ok      github.com/nicholasjackson/grpc-consul-resolver/functional_tests        
 
 
 ## TODO
-[ ] Implement Consul Connect Services lookup
+[ ] Implement Consul Connect Services lookup  
 [ ] Implement prepared queries 
