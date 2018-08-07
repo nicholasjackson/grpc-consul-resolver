@@ -1,22 +1,36 @@
 version: 2
+
 jobs:
   build:
+    working_directory: /go/src/github.com/nicholasjackson/grpc-consul-resolver
     docker:
       - image: circleci/golang:1.10.3
     steps:
       - checkout
       - run: make build 
+      - save_cache:
+          key: v1-repo-{{ .Environment.CIRCLE_SHA1 }}
+          paths:
+            - /go/src/github.com/nicholasjackson/grpc-consul-resolver
+
   test:
+    working_directory: /go/src/github.com/nicholasjackson/grpc-consul-resolver
     docker:
       - image: circleci/golang:1.10.3
     steps:
-      - checkout
+      - restore_cache:
+          keys:
+            - v1-repo-{{ .Environment.CIRCLE_SHA1 }}
       - run: make test_unit
+
   functional:
+    working_directory: /go/src/github.com/nicholasjackson/grpc-consul-resolver
     docker:
       - image: circleci/golang:1.10.3
     steps:
-      - checkout
+      - restore_cache:
+          keys:
+            - v1-repo-{{ .Environment.CIRCLE_SHA1 }}
       - run: 
           name: install and start consul
           command: |
