@@ -61,7 +61,18 @@ func TestNextReturnsInitialUpdatesFromConsul(t *testing.T) {
 }
 
 func TestNextReturnsInitialUpdatesFromConsulSetsNodeWhenNoAddr(t *testing.T) {
-	//	t.Fatal("Pending")
+	w := setupWatcher(t)
+	ses[0].Service.Address = ""
+	ses[0].Node = &api.Node{
+		Address: "localhost",
+	}
+
+	nu, err := w.Next()
+
+	assert.NoError(t, err)
+	assert.Len(t, nu, 1, "Should have returned 1 update")
+	assert.Equal(t, "localhost:8080", nu[0].Addr)
+	assert.Equal(t, naming.Add, nu[0].Op)
 }
 
 func TestNextReturnsUpdatesContainingAddedItemsFromConsul(t *testing.T) {
