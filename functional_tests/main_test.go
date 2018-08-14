@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"testing"
@@ -23,8 +24,14 @@ const consulAddr = "http://localhost:8500"
 
 var consulClient *api.Client
 var responses []string
-var grpcServers []*grpc.Server
-var sockets []net.Listener
+
+type gRPCServer struct {
+	address string
+	server  *grpc.Server
+	socket  net.Listener
+}
+
+var gRPCServers map[string]*gRPCServer
 
 func init() {
 	godog.BindFlags("godog.", flag.CommandLine, &opt)
@@ -44,6 +51,33 @@ func TestMain(m *testing.M) {
 	os.Exit(status)
 }
 
+func FeatureContext(s *godog.Suite) {
+	s.BeforeScenario(setup)
+	s.AfterScenario(cleanup)
+
+	s.Step(`^that Consul is running$`, thatConsulIsRunning)
+	s.Step(`^(\d+) services are started$`, nServicesAreRunningAndRegistered)
+	s.Step(`^(\d+) services are removed$`, nServicesAreStopped)
+	s.Step(`^I call use the client (\d+) times$`, iCallUseTheClientTimes)
+	s.Step(`^I expect (\d+) different endpoints to have been called$`, iExpectDifferentEndpointsToHaveBeenCalled)
+}
+
+func setup(i interface{}) {
+	responses = make([]string, 0)
+	gRPCServers = make(map[string]*gRPCServer)
+
+	conf := api.DefaultConfig()
+	conf.Address = consulAddr
+	consulClient, _ = api.NewClient(conf)
+}
+
+func cleanup(i interface{}, err error) {
+	// stop the gRPC servers
+	for _, s := range gRPCServers {
+		stopGRPCServer(s)
+	}
+}
+
 func thatConsulIsRunning() error {
 	l, err := consulClient.Status().Leader()
 	if err != nil {
@@ -56,30 +90,27 @@ func thatConsulIsRunning() error {
 
 	return nil
 }
+func nServicesAreRunningAndRegistered(arg1 int) error {
+	for i := 0; i < arg1; i++ {
+		port := rand.Intn(1000) + 8000
 
-func theServicesAreRunningAndRegistered() error {
-	runGRPCServer("localhost:7711")
-
-	err := consulClient.Agent().ServiceRegister(&api.AgentServiceRegistration{
-		ID:      "test_grpc1",
-		Name:    "test_grpc",
-		Port:    7711,
-		Address: "localhost",
-	})
-	if err != nil {
-		return err
+		err := runGRPCServer(port)
+		if err != nil {
+			return err
+		}
 	}
 
-	runGRPCServer("localhost:7712")
+	return nil
+}
 
-	err = consulClient.Agent().ServiceRegister(&api.AgentServiceRegistration{
-		ID:      "test_grpc2",
-		Name:    "test_grpc",
-		Port:    7712,
-		Address: "localhost",
-	})
-	if err != nil {
-		return err
+func nServicesAreStopped(arg1 int) error {
+	stopped := 0
+
+	for _, v := range gRPCServers {
+		if stopped < arg1 {
+			stopGRPCServer(v)
+			stopped++
+		}
 	}
 
 	return nil
@@ -144,52 +175,42 @@ func iExpectDifferentEndpointsToHaveBeenCalled(arg1 int) error {
 	return nil
 }
 
-func FeatureContext(s *godog.Suite) {
-	s.BeforeScenario(setup)
-	s.AfterScenario(cleanup)
+func stopGRPCServer(s *gRPCServer) {
+	consulClient.Agent().ServiceDeregister(s.address)
+	s.server.GracefulStop()
+	s.socket.Close()
 
-	s.Step(`^that Consul is running$`, thatConsulIsRunning)
-	s.Step(`^the services are running and registered$`, theServicesAreRunningAndRegistered)
-	s.Step(`^I call use the client (\d+) times$`, iCallUseTheClientTimes)
-	s.Step(`^I expect (\d+) different endpoints to have been called$`, iExpectDifferentEndpointsToHaveBeenCalled)
+	delete(gRPCServers, s.address)
 }
 
-func setup(i interface{}) {
-	responses = make([]string, 0)
-	grpcServers = make([]*grpc.Server, 0)
-	sockets = make([]net.Listener, 0)
+func runGRPCServer(port int) error {
+	addr := fmt.Sprintf("localhost:%d", port)
 
-	conf := api.DefaultConfig()
-	conf.Address = consulAddr
-	consulClient, _ = api.NewClient(conf)
-}
-
-func cleanup(i interface{}, err error) {
-	// deregister the servers
-	consulClient.Agent().ServiceDeregister("test_grpc1")
-	consulClient.Agent().ServiceDeregister("test_grpc2")
-
-	// stop the gRPC servers
-	for _, s := range grpcServers {
-		s.GracefulStop()
-	}
-
-	// close the sockets
-	for _, s := range sockets {
-		s.Close()
-	}
-}
-
-func runGRPCServer(listen string) {
-	lis, err := net.Listen("tcp", listen)
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
-	grpcServer := grpc.NewServer()
-	echo.RegisterEchoServiceServer(grpcServer, &echo.EchoServiceServerImpl{ID: listen})
-	go grpcServer.Serve(lis)
+	s := grpc.NewServer()
+	echo.RegisterEchoServiceServer(s, &echo.EchoServiceServerImpl{ID: addr})
+	go s.Serve(lis)
 
-	grpcServers = append(grpcServers, grpcServer)
-	sockets = append(sockets, lis)
+	// register with Consul
+	err = consulClient.Agent().ServiceRegister(&api.AgentServiceRegistration{
+		ID:      addr,
+		Name:    "test_grpc",
+		Port:    port,
+		Address: "localhost",
+	})
+	if err != nil {
+		return err
+	}
+
+	gRPCServers[addr] = &gRPCServer{
+		address: addr,
+		server:  s,
+		socket:  lis,
+	}
+
+	return nil
 }

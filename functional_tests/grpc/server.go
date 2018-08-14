@@ -11,6 +11,5 @@ type EchoServiceServerImpl struct {
 }
 
 func (e *EchoServiceServerImpl) Echo(ctx context.Context, in *Message) (*Message, error) {
-	fmt.Println("Server id", e.ID, "Echo request", in.Data)
 	return &Message{Data: fmt.Sprintf("Server: %s, Message: %s", e.ID, in.Data)}, nil
 }
