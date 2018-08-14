@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/nicholasjackson/grpc-consul-resolver/catalog"
 	"google.golang.org/grpc/naming"
 )
 
 // ConsulWatcher is a service catalog watcher
 type ConsulWatcher struct {
-	client       ConsulHealth
+	query        catalog.Query
 	update       time.Duration
 	service      string
 	addressCache []string
@@ -19,8 +20,8 @@ type ConsulWatcher struct {
 }
 
 // NewConsulWatcher creates and returns a ConsulWatcher with the given parameters
-func NewConsulWatcher(service string, c ConsulHealth, watchInterval time.Duration) *ConsulWatcher {
-	return &ConsulWatcher{c, watchInterval, service, make([]string, 0), 1}
+func NewConsulWatcher(service string, q catalog.Query, watchInterval time.Duration) *ConsulWatcher {
+	return &ConsulWatcher{q, watchInterval, service, make([]string, 0), 1}
 }
 
 // Next blocks until an update or error happens. It may return one or more
@@ -28,7 +29,7 @@ func NewConsulWatcher(service string, c ConsulHealth, watchInterval time.Duratio
 // return an error if and only if Watcher cannot recover.
 func (c *ConsulWatcher) Next() ([]*naming.Update, error) {
 	for atomic.LoadUint32(&c.running) == 1 {
-		se, _, err := c.client.Service(c.service, "", true, nil)
+		se, err := c.query.Execute(c.service, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -50,13 +51,13 @@ func (c *ConsulWatcher) Close() {
 	atomic.StoreUint32(&c.running, 0)
 }
 
-func (c *ConsulWatcher) buildUpdate(ses []*api.ServiceEntry) ([]*naming.Update, error) {
+func (c *ConsulWatcher) buildUpdate(ses []catalog.ServiceEntry) ([]*naming.Update, error) {
 	nu := make([]*naming.Update, 0)
 	nc := c.addressCache
 
 	// check additions
 	for _, se := range ses {
-		addr := buildAddress(se)
+		addr := se.Addr
 		// does this address already exist in the cache?
 		if !cacheContains(addr, c.addressCache) {
 			nc = append(nc, addr)
@@ -96,9 +97,9 @@ func cacheContains(s string, in []string) bool {
 	return false
 }
 
-func serviceEntryContains(s string, in []*api.ServiceEntry) bool {
+func serviceEntryContains(s string, in []catalog.ServiceEntry) bool {
 	for _, i := range in {
-		if buildAddress(i) == s {
+		if i.Addr == s {
 			return true
 		}
 	}

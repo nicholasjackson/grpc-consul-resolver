@@ -5,44 +5,41 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/nicholasjackson/grpc-consul-resolver/catalog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/naming"
 )
 
-var healthMock *MockConsulHealth
-var ses []*api.ServiceEntry
+var queryMock *catalog.MockQuery
+var ses []catalog.ServiceEntry
 
-func getServices() []*api.ServiceEntry {
+func getServices() []catalog.ServiceEntry {
 	return ses
 }
 
 func setupWatcher(t *testing.T) *ConsulWatcher {
-	ses = make([]*api.ServiceEntry, 1)
-	ses[0] = &api.ServiceEntry{
-		Service: &api.AgentService{
-			Address: "localhost",
-			Port:    8080,
-		},
+	ses = make([]catalog.ServiceEntry, 1)
+	ses[0] = catalog.ServiceEntry{
+		Addr: "localhost:8080",
 	}
 
-	healthMock = &MockConsulHealth{}
-	healthMock.On("Service", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(getServices, nil, nil)
+	queryMock = &catalog.MockQuery{}
+	queryMock.On("Execute", mock.Anything, mock.Anything).Return(getServices, nil)
 
-	return NewConsulWatcher("test", healthMock, 10*time.Millisecond)
+	return NewConsulWatcher("test", queryMock, 10*time.Millisecond)
 }
 
 func TestNewConsulWatcherReturnsWatcher(t *testing.T) {
-	w := NewConsulWatcher("test", &MockConsulHealth{}, 1*time.Second)
+	w := NewConsulWatcher("test", &catalog.MockQuery{}, 1*time.Second)
 
 	assert.NotNil(t, w)
 }
 
 func TestNextReturnsErrorWhenConsulError(t *testing.T) {
 	w := setupWatcher(t)
-	healthMock.ExpectedCalls = make([]*mock.Call, 0)
-	healthMock.On("Service", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil, fmt.Errorf("Boom"))
+	queryMock.ExpectedCalls = make([]*mock.Call, 0)
+	queryMock.On("Execute", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("Boom"))
 
 	_, err := w.Next()
 
@@ -60,35 +57,17 @@ func TestNextReturnsInitialUpdatesFromConsul(t *testing.T) {
 	assert.Equal(t, naming.Add, nu[0].Op)
 }
 
-func TestNextReturnsInitialUpdatesFromConsulSetsNodeWhenNoAddr(t *testing.T) {
-	w := setupWatcher(t)
-	ses[0].Service.Address = ""
-	ses[0].Node = &api.Node{
-		Address: "localhost",
-	}
-
-	nu, err := w.Next()
-
-	assert.NoError(t, err)
-	assert.Len(t, nu, 1, "Should have returned 1 update")
-	assert.Equal(t, "localhost:8080", nu[0].Addr)
-	assert.Equal(t, naming.Add, nu[0].Op)
-}
-
 func TestNextReturnsUpdatesContainingAddedItemsFromConsul(t *testing.T) {
 	w := setupWatcher(t)
 	w.Next()
-	ses = append(ses, &api.ServiceEntry{
-		Service: &api.AgentService{
-			Address: "localhost",
-			Port:    8090,
-		},
+	ses = append(ses, catalog.ServiceEntry{
+		Addr: "localhost:8090",
 	})
 
 	nu, err := w.Next()
 
 	assert.NoError(t, err)
-	healthMock.AssertNumberOfCalls(t, "Service", 2)
+	queryMock.AssertNumberOfCalls(t, "Execute", 2)
 	assert.Len(t, nu, 1, "Should have returned 1 updates")
 
 	assert.Equal(t, "localhost:8090", nu[0].Addr)
@@ -98,12 +77,12 @@ func TestNextReturnsUpdatesContainingAddedItemsFromConsul(t *testing.T) {
 func TestNextReturnsUpdatesContainingDeletedItemsFromConsul(t *testing.T) {
 	w := setupWatcher(t)
 	w.Next()
-	ses = make([]*api.ServiceEntry, 0)
+	ses = make([]catalog.ServiceEntry, 0)
 
 	nu, err := w.Next()
 
 	assert.NoError(t, err)
-	healthMock.AssertNumberOfCalls(t, "Service", 2)
+	queryMock.AssertNumberOfCalls(t, "Execute", 2)
 	assert.Len(t, nu, 1, "Should have returned 1 updates")
 
 	assert.Equal(t, "localhost:8080", nu[0].Addr)
@@ -133,5 +112,5 @@ func TestNextBlocksWhenNoChangesFromConsul(t *testing.T) {
 	w.Close()                         // stop the watcher
 	time.Sleep(10 * time.Millisecond) // wait for exit as loop might be sleeping
 
-	healthMock.AssertNumberOfCalls(t, "Service", 4)
+	queryMock.AssertNumberOfCalls(t, "Execute", 4)
 }

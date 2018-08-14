@@ -14,6 +14,7 @@ import (
 	"github.com/DATA-DOG/godog/colors"
 	"github.com/hashicorp/consul/api"
 	resolver "github.com/nicholasjackson/grpc-consul-resolver"
+	"github.com/nicholasjackson/grpc-consul-resolver/catalog"
 	"github.com/nicholasjackson/grpc-consul-resolver/functional_tests/grpc"
 	"google.golang.org/grpc"
 )
@@ -23,6 +24,8 @@ var opt = godog.Options{Output: colors.Colored(os.Stdout)}
 const consulAddr = "http://localhost:8500"
 
 var consulClient *api.Client
+var echoClient echo.EchoServiceClient
+
 var responses []string
 
 type gRPCServer struct {
@@ -69,6 +72,7 @@ func setup(i interface{}) {
 	conf := api.DefaultConfig()
 	conf.Address = consulAddr
 	consulClient, _ = api.NewClient(conf)
+
 }
 
 func cleanup(i interface{}, err error) {
@@ -76,6 +80,8 @@ func cleanup(i interface{}, err error) {
 	for _, s := range gRPCServers {
 		stopGRPCServer(s)
 	}
+
+	echoClient = nil
 }
 
 func thatConsulIsRunning() error {
@@ -117,28 +123,13 @@ func nServicesAreStopped(arg1 int) error {
 }
 
 func iCallUseTheClientTimes(arg1 int) error {
-	r := resolver.NewResolver(consulClient.Health())
-	lb := grpc.RoundRobin(r)
-
-	// create a new client and wait to establish a connection before returnig
-	c, err := grpc.Dial(
-		"test_grpc",
-		grpc.WithInsecure(),
-		grpc.WithBalancer(lb),
-		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
-	)
-
+	err := initClientIfNeeded()
 	if err != nil {
-		return fmt.Errorf("Error creating grpc client %s", err.Error())
+		return err
 	}
 
-	defer c.Close()
-
-	cc := echo.NewEchoServiceClient(c)
-
 	for i := 0; i < arg1; i++ {
-		msg, err := cc.Echo(context.Background(), &echo.Message{Data: "hello world"})
+		msg, err := echoClient.Echo(context.Background(), &echo.Message{Data: "hello world"})
 		if err != nil {
 			return err
 		}
@@ -181,6 +172,33 @@ func stopGRPCServer(s *gRPCServer) {
 	s.socket.Close()
 
 	delete(gRPCServers, s.address)
+}
+
+func initClientIfNeeded() error {
+	if echoClient == nil {
+		sq := catalog.NewServiceQuery(consulClient.Health())
+		r := resolver.NewResolver(sq)
+		r.PollInterval = 1 * time.Second // override poll interval for tests
+
+		lb := grpc.RoundRobin(r)
+
+		// create a new client and wait to establish a connection before returnig
+		c, err := grpc.Dial(
+			"test_grpc",
+			grpc.WithInsecure(),
+			grpc.WithBalancer(lb),
+			grpc.WithBlock(),
+			grpc.WithTimeout(5*time.Second),
+		)
+
+		if err != nil {
+			return fmt.Errorf("Setup error creating grpc client %s", err.Error())
+		}
+
+		echoClient = echo.NewEchoServiceClient(c)
+	}
+
+	return nil
 }
 
 func runGRPCServer(port int) error {

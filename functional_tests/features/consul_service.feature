@@ -1,5 +1,5 @@
 Feature: As a developer, I want to ensure that the 
-  loabalancer functions correctly
+  loabalancer functions correctly with basic Consul services
 
   Scenario: Calls one upstream
     Given that Consul is running
