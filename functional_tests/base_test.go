@@ -54,7 +54,7 @@ func nServicesAreStopped(arg1 int) error {
 }
 
 func iCallUseTheClientTimes(arg1 int) error {
-	err := initClientIfNeeded()
+	err := initServiceClientIfNeeded()
 	if err != nil {
 		return err
 	}
@@ -189,7 +189,7 @@ func stopGRPCServer(s *gRPCServer) {
 	delete(gRPCServers, s.address)
 }
 
-func initClientIfNeeded() error {
+func initServiceClientIfNeeded() error {
 	if echoClient == nil {
 		sq := catalog.NewServiceQuery(consulClient.Health())
 		r := resolver.NewResolver(sq)

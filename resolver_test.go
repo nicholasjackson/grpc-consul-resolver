@@ -21,3 +21,7 @@ func TestResolveRerturnsWatcher(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, w)
 }
+
+func TestReverseLookupReturnsEntry(t *testing.T) {
+	t.Fatal("Pending")
+}

@@ -15,13 +15,13 @@ type ConsulWatcher struct {
 	query        catalog.Query
 	update       time.Duration
 	service      string
-	addressCache []string
+	addressCache map[string]catalog.ServiceEntry
 	running      uint32
 }
 
 // NewConsulWatcher creates and returns a ConsulWatcher with the given parameters
 func NewConsulWatcher(service string, q catalog.Query, watchInterval time.Duration) *ConsulWatcher {
-	return &ConsulWatcher{q, watchInterval, service, make([]string, 0), 1}
+	return &ConsulWatcher{q, watchInterval, service, make(map[string]catalog.ServiceEntry), 1}
 }
 
 // Next blocks until an update or error happens. It may return one or more
@@ -53,14 +53,13 @@ func (c *ConsulWatcher) Close() {
 
 func (c *ConsulWatcher) buildUpdate(ses []catalog.ServiceEntry) ([]*naming.Update, error) {
 	nu := make([]*naming.Update, 0)
-	nc := c.addressCache
 
 	// check additions
 	for _, se := range ses {
 		addr := se.Addr
 		// does this address already exist in the cache?
-		if !cacheContains(addr, c.addressCache) {
-			nc = append(nc, addr)
+		if _, ok := c.addressCache[addr]; ok != true {
+			c.addressCache[addr] = se
 
 			n := &naming.Update{
 				Op:   naming.Add,
@@ -72,29 +71,18 @@ func (c *ConsulWatcher) buildUpdate(ses []catalog.ServiceEntry) ([]*naming.Updat
 	}
 
 	// check deletions
-	for _, a := range nc {
-		if !serviceEntryContains(a, ses) {
+	for k := range c.addressCache {
+		if !serviceEntryContains(k, ses) {
 			n := &naming.Update{
 				Op:   naming.Delete,
-				Addr: a,
+				Addr: k,
 			}
 
 			nu = append(nu, n)
 		}
 	}
 
-	c.addressCache = nc
 	return nu, nil
-}
-
-func cacheContains(s string, in []string) bool {
-	for _, i := range in {
-		if s == i {
-			return true
-		}
-	}
-
-	return false
 }
 
 func serviceEntryContains(s string, in []catalog.ServiceEntry) bool {

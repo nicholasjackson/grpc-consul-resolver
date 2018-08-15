@@ -18,3 +18,7 @@ type ConsulPreparedQuery interface {
 	Execute(queryIDOrName string, q *api.QueryOptions) (
 		*api.PreparedQueryExecuteResponse, *api.QueryMeta, error)
 }
+
+type ConsulAgent interface {
+	ConnectCARoots(q *api.QueryOptions) (*api.CARootList, *api.QueryMeta, error)
+}
