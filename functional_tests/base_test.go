@@ -25,7 +25,7 @@ func thatConsulIsRunning() error {
 
 func nServicesAreRunningAndRegistered(arg1 int) error {
 	for i := 0; i < arg1; i++ {
-		port := rand.Intn(1000) + 8000
+		port := rand.Intn(1000) + 6000
 
 		err := runGRPCServer(port)
 		if err != nil {

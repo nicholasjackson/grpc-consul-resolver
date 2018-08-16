@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ var preparedQueryID string
 var responses []string
 
 type gRPCServer struct {
+	id      string
 	address string
 	server  *grpc.Server
 	socket  net.Listener
@@ -115,9 +117,10 @@ func runGRPCServer(port int) error {
 	go s.Serve(lis)
 
 	// register with Consul
+	id := strings.Replace(addr, ":", "-", -1)
 	err = consulClient.Agent().ServiceRegister(
 		&api.AgentServiceRegistration{
-			ID:      addr,
+			ID:      id,
 			Name:    "test_grpc",
 			Port:    port,
 			Address: "localhost",
@@ -133,6 +136,7 @@ func runGRPCServer(port int) error {
 	}
 
 	gRPCServers[addr] = &gRPCServer{
+		id:      id,
 		address: addr,
 		server:  s,
 		socket:  lis,
@@ -142,7 +146,7 @@ func runGRPCServer(port int) error {
 }
 
 func stopGRPCServer(s *gRPCServer) {
-	consulClient.Agent().ServiceDeregister(s.address)
+	consulClient.Agent().ServiceDeregister(s.id)
 	s.server.GracefulStop()
 	s.socket.Close()
 
