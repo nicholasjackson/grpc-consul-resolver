@@ -303,7 +303,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:c945d925a3dae287abe075a89c6b09e1015da39d350eb512bb5d01ebcd7783e7"
+  digest = "1:72a132f9a69826381fd8e2aa8ebd3c27160110f4bedb7b8e7ed0e92d01fca715"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -320,15 +320,15 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "f4c29de78a2a91c00474a2e689954305c350adf9"
+  revision = "aaf60122140d3fcf75376d319f0554393160eb50"
 
 [[projects]]
   branch = "master"
-  digest = "1:6171b61a4a42ff7c8a1bd0cfb569c247e1654ec4d918b7da84228974216751f5"
+  digest = "1:05662433b3a13c921587a6e622b5722072edff83211efd1cd79eeaeedfd83f07"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "34b17bdb430002e9db9ae7ddc8480b9fa05edc22"
+  revision = "1c9583448a9c3aa0f9a6a5241bf73c0bd8aafded"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -359,7 +359,7 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "daca94659cb50e9f37c1b834680f2e46358f10b0"
+  revision = "d0a8f471bba2dbb160885b0000d814ee5d559bad"
 
 [[projects]]
   digest = "1:3dd7996ce6bf52dec6a2f69fa43e7c4cefea1d4dfa3c8ab7a5f8a9f7434e239d"
@@ -403,6 +403,7 @@
     "github.com/DATA-DOG/godog",
     "github.com/DATA-DOG/godog/colors",
     "github.com/golang/protobuf/proto",
+    "github.com/hashicorp/consul/agent/connect",
     "github.com/hashicorp/consul/api",
     "github.com/hashicorp/consul/connect",
     "github.com/stretchr/testify/assert",
