@@ -29,6 +29,8 @@ type gRPCServer struct {
 	socket  net.Listener
 }
 
+type proxies map[string]string
+
 var gRPCServers map[string]*gRPCServer
 
 func init() {
@@ -58,6 +60,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^(\d+) services are started$`, nServicesAreRunningAndRegistered)
 	s.Step(`^(\d+) services are removed$`, nServicesAreStopped)
 	s.Step(`^I call use the client (\d+) times$`, iCallUseTheClientTimes)
+	s.Step(`^I call the connect enabled client (\d+) times$`, iCallTheConnectEnabledClientTimes)
 	s.Step(`^I call the client (\d+) times with a query$`, iCallTheClientTimesWithAQuery)
 	s.Step(`^I expect (\d+) different endpoints to have been called$`, iExpectDifferentEndpointsToHaveBeenCalled)
 }

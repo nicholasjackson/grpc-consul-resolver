@@ -8,4 +8,4 @@ goconvey:
 	goconvey -excludedDirs "vendor,functional_tests"
 
 test_functional:
-	cd functional_tests && go test -v --godog.format=pretty --godog.random
+	cd functional_tests && go test -v --godog.format=pretty --godog.random #--godog.tags=@connect

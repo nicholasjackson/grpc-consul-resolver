@@ -1,8 +1,10 @@
 package resolver
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/hashicorp/consul/connect"
 	"github.com/nicholasjackson/grpc-consul-resolver/catalog"
 	"google.golang.org/grpc/naming"
 )
@@ -38,8 +40,20 @@ func (g *ConsulResolver) Resolve(target string) (naming.Watcher, error) {
 	return w, nil
 }
 
-// ReverseLookup allows fetching the service entry from the cache
+// StaticResolver allows fetching the service entry from the cache
 // this is a required function for the Connect static resolver which needs details from the ServiceEntry
-func (g *ConsulResolver) ReverseLookup(target string, address string) (*catalog.ServiceEntry, error) {
-	return nil, nil
+func (g *ConsulResolver) StaticResolver(address string) (*connect.StaticResolver, error) {
+	// find the details in the cache
+	for _, v := range g.watchers {
+		se, ok := v.addressCache[address]
+
+		if ok {
+			return &connect.StaticResolver{
+				Addr:    se.Addr,
+				CertURI: se.CertURI,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Unable to resolve address")
 }

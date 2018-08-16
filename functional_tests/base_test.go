@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/connect"
 	resolver "github.com/nicholasjackson/grpc-consul-resolver"
 	"github.com/nicholasjackson/grpc-consul-resolver/catalog"
 	echo "github.com/nicholasjackson/grpc-consul-resolver/functional_tests/grpc"
@@ -64,6 +65,15 @@ func iCallUseTheClientTimes(arg1 int) error {
 
 func iCallTheClientTimesWithAQuery(arg1 int) error {
 	err := initQueryClientIfNeeded()
+	if err != nil {
+		return err
+	}
+
+	return callClient(echoClient, arg1)
+}
+
+func iCallTheConnectEnabledClientTimes(arg1 int) error {
+	err := initConnectServiceClientIfNeeded()
 	if err != nil {
 		return err
 	}
@@ -162,12 +172,19 @@ func runGRPCServer(port int) error {
 	go s.Serve(lis)
 
 	// register with Consul
-	err = consulClient.Agent().ServiceRegister(&api.AgentServiceRegistration{
-		ID:      addr,
-		Name:    "test_grpc",
-		Port:    port,
-		Address: "localhost",
-	})
+	err = consulClient.Agent().ServiceRegister(
+		&api.AgentServiceRegistration{
+			ID:      addr,
+			Name:    "test_grpc",
+			Port:    port,
+			Address: "localhost",
+			Connect: &api.AgentServiceConnect{
+				Proxy: &api.AgentServiceConnectProxy{
+					Config: map[string]interface{}{"bind_port": port + 1000},
+				},
+			},
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -190,55 +207,104 @@ func stopGRPCServer(s *gRPCServer) {
 }
 
 func initServiceClientIfNeeded() error {
-	if echoClient == nil {
-		sq := catalog.NewServiceQuery(consulClient.Health())
-		r := resolver.NewResolver(sq)
-		r.PollInterval = 1 * time.Second // override poll interval for tests
-
-		lb := grpc.RoundRobin(r)
-
-		// create a new client and wait to establish a connection before returnig
-		c, err := grpc.Dial(
-			"test_grpc",
-			grpc.WithInsecure(),
-			grpc.WithBalancer(lb),
-			grpc.WithBlock(),
-			grpc.WithTimeout(5*time.Second),
-		)
-
-		if err != nil {
-			return fmt.Errorf("Setup error creating grpc client %s", err.Error())
-		}
-
-		echoClient = echo.NewEchoServiceClient(c)
+	if echoClient != nil {
+		return nil
 	}
+
+	sq := catalog.NewServiceQuery(consulClient, false)
+	r := resolver.NewResolver(sq)
+	r.PollInterval = 1 * time.Second // override poll interval for tests
+
+	lb := grpc.RoundRobin(r)
+
+	// create a new client and wait to establish a connection before returnig
+	c, err := grpc.Dial(
+		"test_grpc",
+		grpc.WithInsecure(),
+		grpc.WithBalancer(lb),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
+
+	if err != nil {
+		return fmt.Errorf("Setup error creating grpc client %s", err.Error())
+	}
+
+	echoClient = echo.NewEchoServiceClient(c)
+
+	return nil
+}
+
+func initConnectServiceClientIfNeeded() error {
+	if echoClient != nil {
+		return nil
+	}
+
+	fmt.Println("init client")
+
+	service, err := connect.NewService("test_grpc", consulClient)
+	if err != nil {
+		fmt.Println("Unable to create service", "error", err)
+		return err
+	}
+
+	sq := catalog.NewServiceQuery(consulClient, true)
+	r := resolver.NewResolver(sq)
+	r.PollInterval = 1 * time.Second // override poll interval for tests
+
+	lb := grpc.RoundRobin(r)
+
+	// create a new client and wait to establish a connection before returnig
+	c, err := grpc.Dial(
+		"test_grpc",
+		grpc.WithInsecure(),
+		grpc.WithBalancer(lb),
+		grpc.WithBlock(),
+		grpc.WithTimeout(10*time.Second),
+		grpc.WithDialer(func(addr string, t time.Duration) (net.Conn, error) {
+			sr, err := r.StaticResolver(addr)
+			if err != nil {
+				return nil, err
+			}
+
+			return service.Dial(context.Background(), sr)
+		}),
+	)
+
+	if err != nil {
+		return fmt.Errorf("Setup error creating grpc client %s", err.Error())
+	}
+
+	echoClient = echo.NewEchoServiceClient(c)
 
 	return nil
 }
 
 func initQueryClientIfNeeded() error {
-	if echoClient == nil {
-		sq := catalog.NewPreparedQuery(consulClient.PreparedQuery())
-		r := resolver.NewResolver(sq)
-		r.PollInterval = 1 * time.Second // override poll interval for tests
-
-		lb := grpc.RoundRobin(r)
-
-		// create a new client and wait to establish a connection before returnig
-		c, err := grpc.Dial(
-			"prepared_query",
-			grpc.WithInsecure(),
-			grpc.WithBalancer(lb),
-			grpc.WithBlock(),
-			grpc.WithTimeout(5*time.Second),
-		)
-
-		if err != nil {
-			return fmt.Errorf("Setup error creating grpc client %s", err.Error())
-		}
-
-		echoClient = echo.NewEchoServiceClient(c)
+	if echoClient != nil {
+		return nil
 	}
+
+	sq := catalog.NewPreparedQuery(consulClient.PreparedQuery())
+	r := resolver.NewResolver(sq)
+	r.PollInterval = 1 * time.Second // override poll interval for tests
+
+	lb := grpc.RoundRobin(r)
+
+	// create a new client and wait to establish a connection before returnig
+	c, err := grpc.Dial(
+		"prepared_query",
+		grpc.WithInsecure(),
+		grpc.WithBalancer(lb),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
+
+	if err != nil {
+		return fmt.Errorf("Setup error creating grpc client %s", err.Error())
+	}
+
+	echoClient = echo.NewEchoServiceClient(c)
 
 	return nil
 }
