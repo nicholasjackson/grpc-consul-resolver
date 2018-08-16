@@ -189,6 +189,9 @@ ok      github.com/nicholasjackson/grpc-consul-resolver/functional_tests        
 
 
 ## TODO
-[x] Implement Consul Connect Services lookup  
-[x] Implement prepared queries 
-[ ] Implement prepared queries with Connect Services
+[x] Implement Consul Connect Services lookup   
+[x] Implement prepared queries  
+[ ] Implement prepared queries with Connect Services  
+[ ] Finish implementing query options  
+[ ] Investigate why functional tests hang on CircleCI but run fine locally  
+[ ] Tidy readme and documentation  
