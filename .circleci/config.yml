@@ -23,6 +23,7 @@ jobs:
       - restore_cache:
           keys:
             - v1-repo-{{ .Environment.CIRCLE_SHA1 }}
+      - run: go mod download
       - run: make test_unit
 
   functional:
@@ -33,6 +34,7 @@ jobs:
       - restore_cache:
           keys:
             - v1-repo-{{ .Environment.CIRCLE_SHA1 }}
+      - run: go mod download
       - run:
           name: install and start consul
           command: |
