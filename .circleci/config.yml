@@ -1,13 +1,14 @@
+---
 version: 2
 
 jobs:
   build:
     working_directory: /go/src/github.com/nicholasjackson/grpc-consul-resolver
     docker:
-      - image: circleci/golang:1.10.3
+      - image: circleci/golang:1.11
     steps:
       - checkout
-      - run: make build 
+      - run: make build
       - save_cache:
           key: v1-repo-{{ .Environment.CIRCLE_SHA1 }}
           paths:
@@ -31,7 +32,7 @@ jobs:
       - restore_cache:
           keys:
             - v1-repo-{{ .Environment.CIRCLE_SHA1 }}
-      - run: 
+      - run:
           name: install and start consul
           command: |
             wget https://releases.hashicorp.com/consul/1.2.2/consul_1.2.2_linux_amd64.zip
