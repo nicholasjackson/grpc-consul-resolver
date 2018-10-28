@@ -18,7 +18,7 @@ jobs:
   test:
     working_directory: /go/src/github.com/nicholasjackson/grpc-consul-resolver
     docker:
-      - image: circleci/golang:1.10.3
+      - image: circleci/golang:1.11
     steps:
       - restore_cache:
           keys:
@@ -29,7 +29,7 @@ jobs:
   functional:
     working_directory: /go/src/github.com/nicholasjackson/grpc-consul-resolver
     docker:
-      - image: circleci/golang:1.10.3
+      - image: circleci/golang:1.11
     steps:
       - restore_cache:
           keys:
