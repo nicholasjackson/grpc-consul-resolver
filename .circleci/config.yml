@@ -8,6 +8,7 @@ jobs:
       - image: circleci/golang:1.11
     steps:
       - checkout
+      - run: go mod download
       - run: make build
       - save_cache:
           key: v1-repo-{{ .Environment.CIRCLE_SHA1 }}
