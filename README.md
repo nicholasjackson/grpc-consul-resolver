@@ -28,23 +28,11 @@ on their registered name.  The resolver continually polls Consul (60 seconds by 
 
 ## Basic usage:
 ```
-// Create a consul client
-conf := api.DefaultConfig()
-conf.Address = "http://localhost:8500"
-consulClient, _ = api.NewClient(conf)
+r := resolver.NewServiceQueryResolver("http://consulAddr:8500")
 
-// create an instance of the load balancer with our resolver
 // use the default poll interval of 60 seconds
 // the poll interval can be changed by setting the resolvers PollInterval field
 // r.PollInterval = 10 * time.Second
-
-// The Query is the type of query to use for service catalog lookups, there are 
-// two implemented mehods catalog.ServiceQuery and catalog.PreparedQuery
-sq := catalog.NewServiceQuery(consulClient, true)
-
-// Then create a resolver which is responsible for passing discovered endpoints
-// to the load balancer
-r := resolver.NewResolver(sq)
 
 // Create the gRPC load balancer
 lb := grpc.RoundRobin(r)
@@ -73,36 +61,8 @@ cc.Echo(context.Background(), &echo.Message{Data: "hello world"})
 
 ## Consul Connect usage:
 ```
-// using the Consul Connect SDK create a service object
-connectService, err = connect.NewService("test_grpc", consulClient)
-if err != nil {
-	return fmt.Errorf("Unable to create connect service %s", err)
-}
-
-// Create the service query and set useConnect to true
-sq := catalog.NewServiceQuery(consulClient, true)
-r := resolver.NewResolver(sq)
+r, dialer, _ := resolver.NewConnectServiceQueryResolver("http://consulAddr:8500","my_service")
 lb := grpc.RoundRobin(r)
-
-// We need to create a custom dialer for gRPC, instead of using the built in
-// net.Dial we will use the Dial method from the Consul Connect service.
-// This ensures that mTLS secures the transport and the upstream service
-// identity is valid
-withDialer := grpc.WithDialer(func(addr string, t time.Duration) (net.Conn, error) {
-  // Dial in the Connect package requires a service resolver which returns
-  // the upstream address and the certificate info retrieved from consul
-  // when the service catalog was queried.
-  // Because service resolution has allready been carried out by the gRPC 
-  // loadbalancer through the Resolver we can use the reverse lookup which
-  // takes an endpoint address as a parameter to return a connect StaticResolver
-  // containing the information required for the connection.
-	sr, err := r.StaticResolver(addr)
-	if err != nil {
-		return nil, err
-	}
-
-	return connectService.Dial(context.Background(), sr)
-})
 
 // create a new gRPC client connection
 c, err := grpc.Dial(
@@ -110,11 +70,10 @@ c, err := grpc.Dial(
 	grpc.WithInsecure(),
 	grpc.WithBalancer(lb),
 	grpc.WithTimeout(5*time.Second),
-  withDialer,
+  dialer,
 )
 
 ```
-
 
 ## Testing
 This package has both `unit` and `integration` tests, the unit tests are pure Go tests with mocks replacing the dependency for Consul.  To execute unit tests:

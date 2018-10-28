@@ -1,11 +1,15 @@
 package resolver
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"time"
 
+	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/consul/connect"
 	"github.com/nicholasjackson/grpc-consul-resolver/catalog"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/naming"
 )
 
@@ -19,6 +23,54 @@ type ConsulResolver struct {
 	query        catalog.Query
 	PollInterval time.Duration
 	watchers     map[string]*ConsulWatcher
+}
+
+// NewServiceQueryResolver is a convenience constructor which returns a resolver for the given consul server
+func NewServiceQueryResolver(consulAddr string) *ConsulResolver {
+	conf := api.DefaultConfig()
+	conf.Address = consulAddr
+	consulClient, _ := api.NewClient(conf)
+
+	sq := catalog.NewServiceQuery(consulClient, false)
+
+	return NewResolver(sq)
+}
+
+// NewConnectServiceQueryResolver is a convenience constructor which returns a consul connect enabled resolver for the given consul server
+func NewConnectServiceQueryResolver(consulAddr, serviceName string) (*ConsulResolver, grpc.DialOption, error) {
+	conf := api.DefaultConfig()
+	conf.Address = consulAddr
+	consulClient, _ := api.NewClient(conf)
+
+	connectService, err := connect.NewService(serviceName, consulClient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to create connect service %s", err)
+	}
+
+	sq := catalog.NewServiceQuery(consulClient, true)
+	r := NewResolver(sq)
+
+	// We need to create a custom dialer for gRPC, instead of using the built in
+	// net.Dial we will use the Dial method from the Consul Connect service.
+	// This ensures that mTLS secures the transport and the upstream service
+	// identity is valid
+	withDialer := grpc.WithDialer(func(addr string, t time.Duration) (net.Conn, error) {
+		// Dial in the Connect package requires a service resolver which returns
+		// the upstream address and the certificate info retrieved from consul
+		// when the service catalog was queried.
+		// Because service resolution has allready been carried out by the gRPC
+		// loadbalancer through the Resolver we can use the reverse lookup which
+		// takes an endpoint address as a parameter to return a connect StaticResolver
+		// containing the information required for the connection.
+		sr, err := r.StaticResolver(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		return connectService.Dial(context.Background(), sr)
+	})
+
+	return r, withDialer, nil
 }
 
 // NewResolver returns a new ConsulResolver with the given client
