@@ -63,7 +63,7 @@ func (s *ServiceQuery) Execute(name string, options *api.QueryOptions) ([]Servic
 }
 
 func (s *ServiceQuery) buildCert(se *api.ServiceEntry) (connect.CertURI, error) {
-	service := se.Service.ProxyDestination
+	service := se.Service.Proxy.DestinationServiceName
 	if se.Service.Connect != nil && se.Service.Connect.Native {
 		service = se.Service.Service
 	}

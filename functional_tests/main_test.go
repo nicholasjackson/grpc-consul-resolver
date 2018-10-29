@@ -4,8 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +24,10 @@ import (
 
 var opt = godog.Options{Output: colors.Colored(os.Stdout)}
 
-const consulAddr = "http://localhost:8500"
+var consulAddr = "http://localhost:8500"
+var serviceBind = "localhost"
+var serviceName = "test_grpc"
+var preparedQueryName = "test_grpc_query"
 
 var consulClient *api.Client
 var grpcClient *grpc.ClientConn
@@ -33,10 +38,11 @@ var preparedQueryID string
 var responses []string
 
 type gRPCServer struct {
-	id      string
-	address string
-	server  *grpc.Server
-	socket  net.Listener
+	id           string
+	address      string
+	server       *grpc.Server
+	socket       net.Listener
+	proxyCommand *exec.Cmd
 }
 
 type proxies map[string]string
@@ -45,6 +51,16 @@ var gRPCServers map[string]*gRPCServer
 
 func init() {
 	godog.BindFlags("godog.", flag.CommandLine, &opt)
+
+	envAddr := os.Getenv("CONSUL_HTTP_ADDR")
+	if envAddr != "" {
+		consulAddr = envAddr
+	}
+
+	envAddr = os.Getenv("BIND_ADDR")
+	if envAddr != "" {
+		serviceBind = envAddr
+	}
 }
 
 func TestMain(m *testing.M) {
@@ -105,7 +121,7 @@ func cleanup(i interface{}, err error) {
 }
 
 func runGRPCServer(port int) error {
-	addr := fmt.Sprintf("localhost:%d", port)
+	addr := fmt.Sprintf("%s:%d", serviceBind, port)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -121,13 +137,14 @@ func runGRPCServer(port int) error {
 	err = consulClient.Agent().ServiceRegister(
 		&api.AgentServiceRegistration{
 			ID:      id,
-			Name:    "test_grpc",
+			Name:    serviceName,
 			Port:    port,
-			Address: "localhost",
-			Connect: &api.AgentServiceConnect{
-				Proxy: &api.AgentServiceConnectProxy{
-					Config: map[string]interface{}{"bind_port": port + 1000},
-				},
+			Address: serviceBind,
+			Check: &api.AgentServiceCheck{
+				CheckID:                        id,
+				DeregisterCriticalServiceAfter: "1m",
+				TCP:                            addr,
+				Interval:                       "1s",
 			},
 		},
 	)
@@ -135,20 +152,49 @@ func runGRPCServer(port int) error {
 		return err
 	}
 
+	// start the proxy
+	cmd := startProxy(serviceName, serviceBind, port)
+
 	gRPCServers[addr] = &gRPCServer{
-		id:      id,
-		address: addr,
-		server:  s,
-		socket:  lis,
+		id:           id,
+		address:      addr,
+		server:       s,
+		socket:       lis,
+		proxyCommand: cmd,
 	}
 
 	return nil
+}
+
+func startProxy(serviceName, serviceAddress string, servicePort int) *exec.Cmd {
+	proxyPort := servicePort + 1000
+
+	cmd := exec.Command(
+		"consul",
+		"connect",
+		"proxy",
+		"-service", serviceName,
+		"-http-addr", consulAddr,
+		"-listen", fmt.Sprintf("%s:%d", serviceAddress, proxyPort),
+		"-service-addr", fmt.Sprintf("%s:%d", serviceAddress, servicePort),
+		"-register",
+		"-register-id", fmt.Sprintf("%s-%d", serviceName, servicePort),
+	)
+
+	err := cmd.Start()
+	if err != nil {
+		log.Println(err)
+	}
+	return cmd
 }
 
 func stopGRPCServer(s *gRPCServer) {
 	consulClient.Agent().ServiceDeregister(s.id)
 	s.server.GracefulStop()
 	s.socket.Close()
+
+	// stop the proxy
+	s.proxyCommand.Process.Signal(os.Interrupt)
 
 	delete(gRPCServers, s.address)
 }
@@ -159,12 +205,12 @@ func initServiceClientIfNeeded() error {
 	r.PollInterval = 1 * time.Second // override poll interval for tests
 	lb := grpc.RoundRobin(r)
 
-	return initClient("test_grpc", grpc.WithBalancer(lb))
+	return initClient(serviceName, grpc.WithBalancer(lb))
 }
 
 func initConnectServiceClientIfNeeded() error {
 	var err error
-	connectService, err = connect.NewService("test_grpc", consulClient)
+	connectService, err = connect.NewService(serviceName, consulClient)
 	if err != nil {
 		return fmt.Errorf("Unable to create connect service %s", err)
 	}
@@ -173,7 +219,7 @@ func initConnectServiceClientIfNeeded() error {
 	r := resolver.NewResolver(sq)
 	r.PollInterval = 1 * time.Second // override poll interval for tests
 
-	do := grpc.WithDialer(func(addr string, t time.Duration) (net.Conn, error) {
+	dialer := grpc.WithDialer(func(addr string, t time.Duration) (net.Conn, error) {
 		sr, err := r.StaticResolver(addr)
 		if err != nil {
 			return nil, err
@@ -184,7 +230,7 @@ func initConnectServiceClientIfNeeded() error {
 
 	lb := grpc.RoundRobin(r)
 
-	return initClient("test_grpc", grpc.WithBalancer(lb), do)
+	return initClient(serviceName, grpc.WithBalancer(lb), dialer)
 }
 
 func initQueryClientIfNeeded() error {
@@ -193,7 +239,7 @@ func initQueryClientIfNeeded() error {
 	r.PollInterval = 1 * time.Second // override poll interval for tests
 	lb := grpc.RoundRobin(r)
 
-	return initClient("prepared_query", grpc.WithBalancer(lb))
+	return initClient(preparedQueryName, grpc.WithBalancer(lb))
 }
 
 func initClient(target string, grpcOptions ...grpc.DialOption) error {
