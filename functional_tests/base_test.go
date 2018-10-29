@@ -117,9 +117,9 @@ func iExpectDifferentEndpointsToHaveBeenCalled(arg1 int) error {
 
 func iHaveAPreparedQuery() error {
 	pqo := &api.PreparedQueryDefinition{
-		Name: "prepared_query",
+		Name: preparedQueryName,
 		Service: api.ServiceQuery{
-			Service:     "test_grpc",
+			Service:     serviceName,
 			OnlyPassing: true,
 		},
 	}
