@@ -28,7 +28,8 @@ on their registered name.  The resolver continually polls Consul (60 seconds by 
 
 ## Basic usage:
 ```
-r := resolver.NewServiceQueryResolver("http://consulAddr:8500")
+serviceName := "myService"
+r := resolver.NewServiceQueryResolver("http://consulAddr:8500", serviceName)
 
 // use the default poll interval of 60 seconds
 // the poll interval can be changed by setting the resolvers PollInterval field
@@ -39,7 +40,7 @@ lb := grpc.RoundRobin(r)
 
 // create a new gRPC client connection
 c, err := grpc.Dial(
-	"test_grpc",
+	serviceName,
 	grpc.WithInsecure(),
 	grpc.WithBalancer(lb),
 	grpc.WithTimeout(5*time.Second),
