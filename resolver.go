@@ -26,15 +26,22 @@ type ConsulResolver struct {
 }
 
 // NewServiceQueryResolver is a convenience constructor which returns a resolver for the given consul server
-func NewServiceQueryResolver(consulAddr string) *ConsulResolver {
+func NewServiceQueryResolver(consulAddr, service string) *ConsulResolver {
 	conf := api.DefaultConfig()
 	conf.Address = consulAddr
 	consulClient, _ := api.NewClient(conf)
+
+	// ping for service
+	_, _, err := consulClient.Health().Checks(service, nil)
+	if err != nil {
+		return nil
+	}
 
 	sq := catalog.NewServiceQuery(consulClient, false)
 
 	return NewResolver(sq)
 }
+
 
 // NewConnectServiceQueryResolver is a convenience constructor which returns a consul connect enabled resolver for the given consul server
 func NewConnectServiceQueryResolver(consulAddr, serviceName string) (*ConsulResolver, grpc.DialOption, error) {
